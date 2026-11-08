@@ -34,11 +34,11 @@ h2.label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:
 header{position:sticky;top:0;z-index:30;background:rgba(250,247,242,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin:0 -16px 16px;padding:10px 16px}
 .logo{width:36px;height:36px;border-radius:11px;background:var(--brand);display:grid;place-items:center;font-size:18px}
 .kicker{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-nav.tabs{position:fixed;inset:auto 0 0 0;z-index:40;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs{position:fixed;inset:auto 0 0 0;z-index:40;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom)}
 nav.tabs button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 0;font-size:11px;font-weight:700;color:var(--muted)}
 nav.tabs button span{font-size:21px;transition:transform .15s}
 nav.tabs button.on{color:var(--ink)} nav.tabs button.on span{transform:scale(1.12)}
-@media(min-width:700px){nav.tabs{left:50%;right:auto;bottom:16px;transform:translateX(-50%);width:420px;border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08)}}
+@media(min-width:700px){nav.tabs{left:50%;right:auto;bottom:16px;transform:translateX(-50%);width:500px;border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08)}}
 
 /* knoppen & velden */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border-radius:12px;font-weight:700;font-size:14px;background:var(--ink);color:#fff;transition:transform .1s}
@@ -163,6 +163,16 @@ input[type=range]{width:100%;accent-color:var(--brand);margin-top:12px}
 .photopick img{display:block;max-height:180px;margin:10px auto 0;border-radius:10px}
 .swapcard{border-color:#c7d2fe;background:#eef2ff}
 select.in{appearance:auto}
+.badge{position:absolute;margin:-4px 0 0 -6px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:var(--brand);color:#fff;font:800 10px/17px var(--font)}
+nav.tabs button span{position:relative}
+.shoplist{overflow:hidden}
+.shopitem-row{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--line);min-height:52px}
+.shopitem-row:first-child{border-top:0}
+.tick{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);flex-shrink:0;color:#fff;font-weight:900;font-size:15px}
+.tick:hover{border-color:#10b981}
+.in-cart .tick{background:#10b981;border-color:#10b981}
+.in-cart .iname,.in-cart .qty{text-decoration:line-through;color:var(--muted)}
+.qty{color:var(--brand)}
 .invite{background:var(--brand);color:#fff;border-radius:var(--r);padding:20px}
 .code{font:900 38px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.3em;margin:8px 0 12px}
 
@@ -222,7 +232,7 @@ const periodStart = (p) => (p === "week" ? startOfWeek(new Date()) : startOfMont
 /* ===================== Status ===================== */
 const S = {
   user: null, household: null, members: [], tasks: [], events: [], completions: [], rewards: [],
-  shop: [], redemptions: [], balances: {}, swaps: [],
+  shop: [], redemptions: [], balances: {}, swaps: [], shopping: [],
   tab: "agenda", loading: true,
   cal: { mode: "week", anchor: new Date(), filter: [] },
   taskFilter: "all", period: "week",
@@ -293,6 +303,12 @@ function makeDemoClient() {
       swaps: [{ id:"sw1", household_id:H, from_member:"m2", to_member:"m1", give_task_id:"t4", take_task_id:"t5",
         note:"Ik heb zaterdag een wedstrijd", status:"pending", created_by:null, created_at:at(0, 7), responded_at:null }],
       photos: {},
+      shopping_items: [["Melk","2","Zuivel & eieren","m3"],["Brood",null,"Brood & ontbijt","m1"],["Bananen",null,"Groente & fruit","m4"],
+        ["Pindakaas",null,"Brood & ontbijt","m2"],["Wc-papier",null,"Huishouden","m1"],["Tandpasta",null,"Drogisterij","m3"]]
+        .map(([name, qty, category, added_by], i) => ({ id:uid(), household_id:H, name, qty, category, added_by, checked:false, checked_by:null,
+          cleared:false, created_at:at(0, 8 + i), updated_at:at(0, 8 + i) }))
+        .concat([["Koffie","Drinken"],["Kaas","Zuivel & eieren"],["Melk","Zuivel & eieren"],["Pasta","Voorraad"],["Koffie","Drinken"]].map(([name, category], i) =>
+          ({ id:uid(), household_id:H, name, qty:null, category, added_by:"m1", checked:true, checked_by:"m1", cleared:true, created_at:at(-7 - i, 10), updated_at:at(-7 - i, 18) }))),
       rewards: [{ id:"r1", household_id:H, title:"Samen uit eten", target_points:400, period:"week", active:true }],
     };
   };
@@ -341,7 +357,7 @@ function makeDemoClient() {
 
   const channel = { on() { return channel; }, subscribe() { return channel; } };
   const toDataUrl = (blob) => new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(blob); });
-  db.photos ||= {}; db.swaps ||= [];
+  db.photos ||= {}; db.swaps ||= []; db.shopping_items ||= [];
   return {
     storage: { from: () => ({
       async upload(path, blob) { db.photos[path] = await toDataUrl(blob); save(); return { data:{ path }, error:null }; },
@@ -396,6 +412,11 @@ const load = {
   },
   async rewards() { const { data } = await sb.from("rewards").select("*").eq("household_id", S.household.id).eq("active", true); if (data) S.rewards = data; },
   async shop() { const { data } = await sb.from("shop_items").select("*").eq("household_id", S.household.id).eq("active", true).order("cost"); if (data) S.shop = data; },
+  async shopping() {
+    const { data } = await sb.from("shopping_items").select("*").eq("household_id", S.household.id)
+      .gte("created_at", addDays(new Date(), -60).toISOString()).order("created_at");
+    if (data) S.shopping = data;
+  },
   async swaps() {
     const { data } = await sb.from("swaps").select("*").eq("household_id", S.household.id).order("created_at", { ascending:false }).limit(60);
     if (data) S.swaps = data;
@@ -427,6 +448,7 @@ async function boot() {
     await Promise.all(Object.values(load).map((f) => f()));
     subscribe();
     cleanupOldPhotos();
+    cleanupShopping();
   }
   S.loading = false;
   render();
@@ -438,7 +460,7 @@ function subscribe() {
   const filter = `household_id=eq.${S.household.id}`;
   channel = sb.channel("hh-" + S.household.id);
   const map = { members:["members"], tasks:["tasks"], events:["events"], task_completions:["completions","balances"],
-    rewards:["rewards"], shop_items:["shop"], redemptions:["redemptions","balances"], swaps:["swaps"] };
+    rewards:["rewards"], shop_items:["shop"], redemptions:["redemptions","balances"], swaps:["swaps"], shopping_items:["shopping"] };
   Object.entries(map).forEach(([table, keys]) =>
     channel.on("postgres_changes", { event:"*", schema:"public", table, filter }, async () => {
       await Promise.all(keys.map((k) => load[k]())); render();
@@ -459,8 +481,9 @@ function render() {
   if (S.loading) return;
   if (!S.user) return (app.innerHTML = viewLogin());
   if (!S.household) return (app.innerHTML = viewOnboarding());
-  const views = { agenda: viewAgenda, taken: viewTasks, scores: viewScores, gezin: viewFamily };
-  const tabs = [["agenda","📅","Agenda"],["taken","✅","Taken"],["scores","🏆","Scores"],["gezin","👨‍👩‍👧","Gezin"]];
+  const views = { agenda: viewAgenda, taken: viewTasks, lijst: viewShopping, scores: viewScores, gezin: viewFamily };
+  const tabs = [["agenda","📅","Agenda"],["taken","✅","Taken"],["lijst","🛒","Boodschappen"],["scores","🏆","Scores"],["gezin","👨‍👩‍👧","Gezin"]];
+  const toBuy = S.shopping.filter((i) => !i.cleared && !i.checked).length;
   app.innerHTML = `
     <div class="wrap">
       <header class="row between">
@@ -473,7 +496,7 @@ function render() {
         <button class="bold" data-act="resetDemo">Opnieuw</button></div>` : ""}
       ${views[S.tab]()}
     </div>
-    <nav class="tabs">${tabs.map(([k,i,l]) => `<button data-act="tab" data-v="${k}" class="${S.tab===k?"on":""}"><span>${i}</span>${l}</button>`).join("")}</nav>`;
+    <nav class="tabs">${tabs.map(([k,i,l]) => `<button data-act="tab" data-v="${k}" class="${S.tab===k?"on":""}"><span>${i}${k === "lijst" && toBuy ? `<b class="badge">${toBuy}</b>` : ""}</span>${l}</button>`).join("")}</nav>`;
 }
 
 /* ---------- Setup / login / onboarding ---------- */
@@ -974,6 +997,103 @@ function inviteQR() {
   return `<div class="qrbox"><div class="qr">${qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true })}</div>
     <p class="small"><b>📱 Scan om mee te doen</b><br>Richt de camera van een telefoon op de code; de link opent met de uitnodiging al ingevuld.</p></div>`;
 }
+/* ---------- Boodschappen ---------- */
+const SHOP_CATS = [
+  ["Groente & fruit", "🥦", "appel banaan peer sinaas citroen limoen tomaat komkommer sla ui knoflook paprika wortel aardappel broccoli spinazie avocado druif aardbei fruit groente champignon courgette prei bloemkool mandarijn kiwi bosbes framboos mango ananas meloen watermeloen"],
+  ["Zuivel & eieren", "🥛", "melk kaas yoghurt kwark boter room ei vla karnemelk margarine skyr"],
+  ["Brood & ontbijt", "🍞", "brood beschuit croissant muesli cornflakes havermout hagelslag pindakaas jam crackers stokbrood bolletjes ontbijtkoek wraps"],
+  ["Vlees & vis", "🥩", "kip gehakt vlees worst ham spek vis zalm tonijn biefstuk rookworst salami garnalen shoarma burger"],
+  ["Diepvries", "🧊", "diepvries pizza patat friet ijsblokjes doperwten"],
+  ["Voorraad", "🥫", "pasta spaghetti macaroni rijst meel suiker zout olie saus soep bonen noodles kruiden peper ketchup mayo mosterd azijn bouillon tomatenpuree"],
+  ["Drinken", "🧃", "koffie thee sap appelsap sinaasappelsap jus cola water bier wijn frisdrank limonade ranja energy"],
+  ["Snoep & snacks", "🍫", "chips koek chocola snoep nootjes drop ijs popcorn"],
+  ["Drogisterij", "🧴", "shampoo tandpasta zeep deo douchegel scheer watten paracetamol pleister tandenborstel maandverband tampon crème creme zonnebrand"],
+  ["Huishouden", "🧻", "wc-papier wcpapier toiletpapier keukenrol vaatwas afwasmiddel wasmiddel vuilniszak batterij lamp schoonmaak allesreiniger spons folie bakpapier wasverzachter"],
+  ["Overig", "🛍️", ""],
+];
+const catIcon = (c) => (SHOP_CATS.find((x) => x[0] === c) ?? SHOP_CATS.at(-1))[1];
+function guessCategory(name) {
+  const n = " " + name.toLowerCase();
+  let best = "Overig", len = 0; // langste passende woord wint ("sinaasappelsap" → Drinken, niet Fruit)
+  for (const [cat, , words] of SHOP_CATS) for (const w of words ? words.split(" ") : [])
+    if ((n.includes(" " + w) || n.includes("-" + w)) && w.length > len) { best = cat; len = w.length; }
+  return best;
+}
+/** "2 melk", "2x melk", "melk 2x", "1 kg appels" → { qty, name } */
+function parseItem(text) {
+  const t = text.trim().replace(/\s+/g, " ");
+  let m = t.match(/^(\d+(?:[.,]\d+)?\s*(?:x|st|stuks|kg|g|gr|l|liter|pak|pakken|zak|zakken|blik|blikken|fles|flessen)?)\s+(.+)$/i);
+  if (m) return { qty: m[1], name: m[2] };
+  m = t.match(/^(.+?)\s+(\d+\s*x?)$/i);
+  if (m) return { qty: m[2].replace(/\s+/g, ""), name: m[1] };
+  return { qty: null, name: t };
+}
+const capFirst = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function viewShopping() {
+  const list = S.shopping.filter((i) => !i.cleared);
+  const open = list.filter((i) => !i.checked), cart = list.filter((i) => i.checked);
+  // Suggesties: vaak gekocht (laatste 60 dagen), nu niet op de lijst
+  const freq = {};
+  S.shopping.filter((i) => i.cleared).forEach((i) => { const k = i.name.toLowerCase(); freq[k] = { name: i.name, n: (freq[k]?.n ?? 0) + 1 }; });
+  const sugg = Object.values(freq).filter((f) => !list.some((i) => sameName(i.name, f.name))).sort((a, b) => b.n - a.n).slice(0, 10);
+
+  const item = (i) => {
+    const by = member(i.checked ? i.checked_by : i.added_by);
+    return `<li class="shopitem-row ${i.checked ? "in-cart" : ""}">
+      <button class="tick" data-act="toggleItem" data-v="${i.id}" aria-label="${i.checked ? "Terug op de lijst" : "In het mandje"}">${i.checked ? "✓" : ""}</button>
+      <button class="grow trunc" style="text-align:left" data-act="editItem" data-v="${i.id}">
+        ${i.qty ? `<b class="qty">${esc(i.qty)}</b> ` : ""}<span class="iname">${esc(i.name)}</span></button>
+      ${by ? avatar(by, 22) : ""}
+    </li>`;
+  };
+  const groups = SHOP_CATS.map(([cat, icon]) => {
+    const items = open.filter((i) => (i.category || "Overig") === cat);
+    return items.length ? `<h2 class="label">${icon} ${esc(cat)}</h2><ul class="card shoplist">${items.map(item).join("")}</ul>` : "";
+  }).join("");
+
+  return `
+    <div class="row between" style="align-items:flex-end">
+      <div><h1>Boodschappen</h1><p class="muted small">${open.length ? `${open.length} ${open.length === 1 ? "ding" : "dingen"} nodig` : "Niets nodig 🎉"}</p></div>
+      ${list.length ? `<button class="chip plain" data-act="shareList">📤 Delen</button>` : ""}
+    </div>
+    <form data-form="shopAdd" class="row mt" style="gap:8px">
+      <input class="in grow" name="item" autocomplete="off" maxlength="80" placeholder="Wat is er op? bijv. 2 melk" aria-label="Product toevoegen">
+      <button class="btn" style="width:48px;padding:0;font-size:22px" aria-label="Toevoegen">+</button>
+    </form>
+    ${sugg.length ? `<div class="chips" style="margin-top:10px">${sugg.map((f) =>
+      `<button class="chip plain" data-act="quickAdd" data-v="${esc(f.name)}">+ ${esc(f.name)}</button>`).join("")}</div>` : ""}
+    ${groups || (cart.length ? "" : `<p class="card pad muted mt" style="text-align:center">De lijst is leeg. Is er iets op? Zet het hierboven erop.</p>`)}
+    ${cart.length ? `<h2 class="label">🧺 In het mandje · ${cart.length}</h2><ul class="card shoplist">${cart.map(item).join("")}</ul>
+      <button class="btn full mt" data-act="finishShopping">✅ Klaar met boodschappen</button>
+      <p class="muted small" style="text-align:center;margin-top:6px">Haalt wat in het mandje zit van de lijst.</p>` : ""}`;
+}
+
+async function addShoppingItem(text) {
+  const { qty, name: raw } = parseItem(text);
+  if (!raw) return;
+  const name = capFirst(raw);
+  const existing = S.shopping.find((i) => !i.cleared && !i.checked && sameName(i.name, name));
+  if (existing) return toast(`${existing.name} staat al op de lijst`);
+  const row = { household_id: S.household.id, name, qty, category: guessCategory(name), added_by: me()?.id ?? null,
+    checked: false, cleared: false };
+  const temp = { ...row, id: "temp-" + Date.now(), created_at: new Date().toISOString() };
+  S.shopping.push(temp); render(); $("[name=item]")?.focus();
+  const { error } = await sb.from("shopping_items").insert(row);
+  if (error) toast("Mislukt: " + error.message);
+  await load.shopping(); render(); $("[name=item]")?.focus();
+}
+
+/** Afgeronde items ouder dan 60 dagen wissen (max. 1x per dag). */
+async function cleanupShopping() {
+  try { const k = "ff-shop-cleanup-" + S.household.id, d = toDateInput(new Date()); if (localStorage.getItem(k) === d) return; localStorage.setItem(k, d); } catch {}
+  try {
+    await sb.from("shopping_items").delete().eq("household_id", S.household.id).eq("cleared", true)
+      .lt("updated_at", addDays(new Date(), -60).toISOString());
+  } catch {}
+}
+
 function viewFamily() {
   const mine = me();
   const canEdit = (m) => m.user_id === S.user.id || !m.user_id || mine?.role === "admin";
@@ -1088,6 +1208,52 @@ const actions = {
       <p class="muted small" style="margin-top:8px">${esc(m?.avatar)} ${esc(m?.display_name)} · ${fmt(c.completed_at, { weekday:"long", day:"numeric", month:"long" })} ${time(c.completed_at)}</p>`);
   },
 
+  quickAdd: (v) => addShoppingItem(v),
+  toggleItem: async (v) => {
+    const it = S.shopping.find((i) => i.id === v);
+    if (!it || String(v).startsWith("temp")) return;
+    const patch = { checked: !it.checked, checked_by: it.checked ? null : me()?.id ?? null, updated_at: new Date().toISOString() };
+    Object.assign(it, patch); render();
+    const { error } = await sb.from("shopping_items").update(patch).eq("id", v);
+    if (error) { toast("Mislukt: " + error.message); await load.shopping(); render(); }
+  },
+  editItem: (v) => {
+    const it = S.shopping.find((i) => i.id === v);
+    if (!it) return;
+    openSheet("Product aanpassen", `<form data-form="shopEdit" data-id="${it.id}" class="stack">
+      <div class="grid2" style="grid-template-columns:2fr 1fr">
+        <label class="f"><span>Product</span><input class="in" name="name" required maxlength="80" value="${esc(it.name)}"></label>
+        <label class="f"><span>Aantal</span><input class="in" name="qty" maxlength="20" value="${esc(it.qty)}" placeholder="bijv. 2"></label>
+      </div>
+      <label class="f"><span>Afdeling</span><select class="in" name="category">${SHOP_CATS.map(([c, i]) =>
+        `<option value="${esc(c)}" ${c === it.category ? "selected" : ""}>${i} ${esc(c)}</option>`).join("")}</select></label>
+      <p class="muted small">Op de lijst gezet door ${esc(member(it.added_by)?.display_name ?? "onbekend")}.</p>
+      <div class="row"><button type="button" class="btn danger" data-act="deleteItem" data-v="${it.id}">Verwijderen</button>
+        <button class="btn grow">Opslaan</button></div></form>`);
+  },
+  deleteItem: async (v) => {
+    closeSheet(); S.shopping = S.shopping.filter((i) => i.id !== v); render();
+    await sb.from("shopping_items").delete().eq("id", v);
+  },
+  finishShopping: async () => {
+    const n = S.shopping.filter((i) => !i.cleared && i.checked).length;
+    S.shopping.forEach((i) => { if (!i.cleared && i.checked) i.cleared = true; }); render();
+    const { error } = await sb.from("shopping_items").update({ cleared: true, updated_at: new Date().toISOString() })
+      .eq("household_id", S.household.id).eq("checked", true).eq("cleared", false);
+    if (error) return toast("Mislukt: " + error.message);
+    await load.shopping();
+    // Koppeling met de takenlijst: punten voor het boodschappen doen
+    const task = S.tasks.find((t) => /boodschap/i.test(t.title) && !currentCompletion(t));
+    if (task) { S.tab = "taken"; render(); actions.check(task.id); toast(`${n} ${n === 1 ? "product" : "producten"} gehaald. Wie krijgt de punten?`); }
+    else { render(); toast(`Top! ${n} ${n === 1 ? "product" : "producten"} gehaald 🛒`); }
+  },
+  shareList: async () => {
+    const open = S.shopping.filter((i) => !i.cleared && !i.checked);
+    const text = `🛒 Boodschappen ${S.household.name}\n` + SHOP_CATS.map(([c]) => open.filter((i) => i.category === c))
+      .flat().map((i) => `• ${i.qty ? i.qty + " " : ""}${i.name}`).join("\n");
+    if (navigator.share) await navigator.share({ text }).catch(() => {});
+    else { try { await navigator.clipboard.writeText(text); toast("Lijst gekopieerd ✓"); } catch { prompt("Kopieer de lijst:", text); } }
+  },
   newSwap: () => {
     const mine = me(), others = S.members.filter((m) => m.id !== mine?.id);
     const open = S.tasks.filter((t) => !currentCompletion(t));
@@ -1247,6 +1413,16 @@ const forms = {
     }
     if (who.length) { const r = await sb.from("event_members").insert(who.map((member_id) => ({ event_id: id, member_id }))); if (r.error) throw r.error; }
     await load.events(); closeSheet(); render();
+  },
+  async shopAdd(f) {
+    const v = f.item.value; f.item.value = "";
+    await addShoppingItem(v);
+  },
+  async shopEdit(f) {
+    const patch = { name: capFirst(f.name.value.trim()), qty: f.qty.value.trim() || null, category: f.category.value, updated_at: new Date().toISOString() };
+    const { error } = await sb.from("shopping_items").update(patch).eq("id", f.dataset.id);
+    if (error) throw error;
+    await load.shopping(); closeSheet(); render();
   },
   async swap(f) {
     if (f.take.value && f.take.value === f.give.value) throw new Error("Kies twee verschillende taken.");
