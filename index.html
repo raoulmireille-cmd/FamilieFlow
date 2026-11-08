@@ -309,6 +309,8 @@ function makeDemoClient() {
     select(sel) { if (this.op === "select") this.sel = sel || ""; return this; }
     eq(col, val) { this.filters.push((r) => r[col] === val); return this; }
     gte(col, val) { this.filters.push((r) => r[col] >= val); return this; }
+    lt(col, val) { this.filters.push((r) => r[col] < val); return this; }
+    not(col, op, val) { this.filters.push((r) => (r[col] ?? null) !== val); return this; }
     order(col, o = {}) { this.sort = [col, o.ascending !== false]; return this; }
     limit() { return this; }
     insert(p) { this.op = "insert"; this.payload = p; return this; }
@@ -362,6 +364,10 @@ function makeDemoClient() {
         db.redemptions.unshift({ id:uid(), household_id:it.household_id, item_id:it.id, item_title:it.title, item_icon:it.icon,
           member_id:m.id, cost:it.cost, redeemed_at:new Date().toISOString(), logged_by:"demo-user" });
         save(); return { data:"ok", error:null };
+      }
+      if (name === "clear_old_photo_paths") {
+        db.task_completions.forEach((c) => { if (a.p_ids.includes(c.id)) c.photo_path = null; }); save();
+        return { data: a.p_ids.length, error:null };
       }
       if (name === "respond_swap") {
         const sw = db.swaps.find((x) => x.id === a.p_swap);
@@ -420,6 +426,7 @@ async function boot() {
   if (S.household) {
     await Promise.all(Object.values(load).map((f) => f()));
     subscribe();
+    cleanupOldPhotos();
   }
   S.loading = false;
   render();
@@ -742,7 +749,7 @@ function viewTasks() {
         + (bonus ? ` · <span style="color:#b91c1c">${days} ${days === 1 ? "dag" : "dagen"} te laat</span>` : "");
     const pts = c ? `<span class="pts">+${c.points}</span>`
       : bonus ? `<span class="pts hot" title="Inclusief ${bonus} bonuspunten">🔥 +${t.points + bonus}</span>` : `<span class="pts">+${t.points}</span>`;
-    const photo = c?.photo_path ? `<button class="photobtn" data-act="viewPhoto" data-v="${c.id}" aria-label="Foto bekijken">📷</button>` : "";
+    const photo = hasPhoto(c) ? `<button class="photobtn" data-act="viewPhoto" data-v="${c.id}" aria-label="Foto bekijken">📷</button>` : "";
     const action = !c ? `<button class="check" data-act="check" data-v="${t.id}" aria-label="Afvinken">✓</button>`
       : c.logged_by === S.user.id && !String(c.id).startsWith("temp")
         ? `<button class="muted small bold" style="height:44px;padding:0 6px" data-act="undo" data-v="${c.id}">Ongedaan</button>`
@@ -793,8 +800,33 @@ function taskForm(t) {
   </form>`;
 }
 
-/** Foto verkleinen tot max. 1280px JPEG, zodat het snel uploadt en weinig ruimte kost. */
-function shrinkImage(file, max = DEMO ? 800 : 1280) {
+/* Foto's worden na 30 dagen verwijderd. De app ruimt op zodra iemand hem opent (max. 1x per dag):
+   ieder zijn eigen foto's, de beheerder ook die van de rest. Punten en geschiedenis blijven staan. */
+const PHOTO_DAYS = 30;
+const photoExpired = (c) => Date.now() - new Date(c.completed_at).getTime() > PHOTO_DAYS * DAY;
+const hasPhoto = (c) => !!c?.photo_path && !photoExpired(c);
+async function cleanupOldPhotos() {
+  try {
+    const key = "ff-photo-cleanup-" + S.household.id, today = toDateInput(new Date());
+    if (localStorage.getItem(key) === today) return;
+    localStorage.setItem(key, today);
+  } catch {}
+  try {
+    const { data } = await sb.from("task_completions").select("id, photo_path, logged_by")
+      .eq("household_id", S.household.id).not("photo_path", "is", null)
+      .lt("completed_at", addDays(new Date(), -PHOTO_DAYS).toISOString()).limit(200);
+    const mine = (data ?? []).filter((c) => c.logged_by === S.user.id || me()?.role === "admin");
+    if (!mine.length) return;
+    const { error } = await sb.storage.from("bewijs").remove(mine.map((c) => c.photo_path));
+    if (error) return;
+    await sb.rpc("clear_old_photo_paths", { p_ids: mine.map((c) => c.id) });
+    await load.completions(); render();
+  } catch (e) { console.warn("Foto's opruimen mislukt", e); }
+}
+
+/** Foto verkleinen tot max. 800px JPEG (± 40–80 KB), zodat het snel uploadt en weinig opslag kost. */
+const PHOTO_MAX_PX = 800, PHOTO_QUALITY = 0.6;
+function shrinkImage(file, max = PHOTO_MAX_PX) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file), img = new Image();
     img.onload = () => {
@@ -803,7 +835,7 @@ function shrinkImage(file, max = DEMO ? 800 : 1280) {
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      c.toBlob((b) => (b ? resolve(b) : reject(new Error("Foto verwerken mislukt"))), "image/jpeg", DEMO ? 0.7 : 0.82);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("Foto verwerken mislukt"))), "image/jpeg", PHOTO_QUALITY);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Dit bestand is geen foto")); };
     img.src = url;
@@ -874,7 +906,7 @@ function viewScores() {
   const feed = [
     ...inPeriod.map((c) => ({ at: c.completed_at, m: c.member_id, pts: `+${c.points}`, plus: true,
       text: esc(c.task_title) + (c.bonus ? ` <span style="color:#b91c1c">🔥</span>` : "")
-        + (c.photo_path ? ` <button data-act="viewPhoto" data-v="${c.id}" aria-label="Foto bekijken">📷</button>` : "") })),
+        + (hasPhoto(c) ? ` <button data-act="viewPhoto" data-v="${c.id}" aria-label="Foto bekijken">📷</button>` : "") })),
     ...S.redemptions.filter((r) => new Date(r.redeemed_at).getTime() >= since).map((r) => ({
       at: r.redeemed_at, m: r.member_id, text: `${esc(r.item_icon)} ${esc(r.item_title)} <span class="muted">ingewisseld</span>`, pts: `−${r.cost}`, plus: false,
       undo: r.logged_by === S.user.id || me()?.role === "admin" ? r.id : null })),
@@ -1048,6 +1080,7 @@ const actions = {
   viewPhoto: async (v) => {
     const c = S.completions.find((x) => x.id === v);
     if (!c?.photo_path) return;
+    if (photoExpired(c)) return toast("Deze foto is na 30 dagen verwijderd");
     const { data, error } = await sb.storage.from("bewijs").createSignedUrl(c.photo_path, 3600);
     if (error) return toast("Foto laden mislukt: " + error.message);
     const m = member(c.member_id);
