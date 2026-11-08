@@ -7,6 +7,7 @@
 <title>FamilieFlow</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏡</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
 /* ===================== Stijl ===================== */
 :root{
@@ -148,6 +149,9 @@ input[type=range]{width:100%;accent-color:var(--brand);margin-top:12px}
 .shopicon{display:block;font-size:34px;margin-bottom:4px}
 .cost{display:inline-block;background:#ede9fe;color:#6d28d9;font-weight:800;font-size:12px;padding:3px 10px;border-radius:99px;margin-top:4px}
 .who button:disabled{opacity:.4}
+.qrbox{display:flex;align-items:center;gap:14px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.3)}
+.qrbox .qr{flex-shrink:0;width:132px;height:132px;background:#fff;border-radius:12px;padding:6px}
+.qrbox .qr svg{display:block;width:100%;height:100%}
 .invite{background:var(--brand);color:#fff;border-radius:var(--r);padding:20px}
 .code{font:900 38px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.3em;margin:8px 0 12px}
 
@@ -167,8 +171,8 @@ input[type=range]{width:100%;accent-color:var(--brand);margin-top:12px}
    (Supabase → Project Settings → API). De anon key mag openbaar zijn:
    de database-regels (RLS) beschermen de gegevens.
    ===================================================================== */
-const SUPABASE_URL = "https://JOUW-PROJECT.supabase.co";
-const SUPABASE_ANON_KEY = "JOUW-ANON-KEY";
+const SUPABASE_URL = "https://povwzduaqnnhrmrdcmjv.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_ykGlOZUhFi64yFtAC5rsvw_Od0gHN6r";
 
 /* ===================== Constanten ===================== */
 const COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#ec4899","#0ea5e9","#8b5cf6","#14b8a6"];
@@ -234,7 +238,11 @@ const member = (id) => S.members.find((m) => m.id === id);
 let sb = null;
 const configured = !SUPABASE_URL.includes("JOUW-PROJECT");
 let DEMO = false;
-try { DEMO = localStorage.getItem("ff-demo") === "1" || new URLSearchParams(location.search).has("demo"); } catch {}
+try {
+  // Met ingevulde Supabase-gegevens alleen demo via ?demo in de adresbalk
+  if (configured) localStorage.removeItem("ff-demo");
+  DEMO = new URLSearchParams(location.search).has("demo") || (!configured && localStorage.getItem("ff-demo") === "1");
+} catch {}
 if (DEMO) sb = makeDemoClient();
 else if (configured) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -797,6 +805,17 @@ function viewScores() {
 }
 
 /* ---------- Gezin ---------- */
+/** QR-code met de uitnodigingslink. Werkt alleen als de app online staat (niet vanaf een bestand op je computer). */
+function inviteQR() {
+  const online = location.protocol === "https:" || location.protocol === "http:";
+  if (!online) return `<div class="qrbox"><p class="small"><b>📱 QR-code</b><br>Verschijnt hier zodra de app online staat (bijv. op GitHub Pages). Een QR-code naar een bestand op deze computer werkt niet op andere telefoons.</p></div>`;
+  if (typeof qrcode !== "function") return `<div class="qrbox"><p class="small">QR-code kon niet laden (geen internet?).</p></div>`;
+  const qr = qrcode(0, "M");
+  qr.addData(inviteLink(S.household.invite_code));
+  qr.make();
+  return `<div class="qrbox"><div class="qr">${qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true })}</div>
+    <p class="small"><b>📱 Scan om mee te doen</b><br>Richt de camera van een telefoon op de code; de link opent met de uitnodiging al ingevuld.</p></div>`;
+}
 function viewFamily() {
   const mine = me();
   const canEdit = (m) => m.user_id === S.user.id || !m.user_id || mine?.role === "admin";
@@ -806,7 +825,8 @@ function viewFamily() {
       <div class="code">${esc(S.household.invite_code)}</div>
       <div class="row wrapflex"><button class="btn ghost" style="height:36px" data-act="share">Uitnodiging delen</button>
       <button class="btn ghost" style="height:36px;background:rgba(255,255,255,.2);color:#fff;border-color:rgba(255,255,255,.4)" data-act="copyLink">Link kopiëren</button></div>
-      <p class="small" style="opacity:.85;margin-top:10px">Wie op de link klikt, krijgt de code automatisch ingevuld.</p></div>
+      <p class="small" style="opacity:.85;margin-top:10px">Wie op de link klikt, krijgt de code automatisch ingevuld.</p>
+      ${inviteQR()}</div>
     <div class="row between"><h2 class="label">Gezinsleden</h2><button class="link" data-act="newMember">+ Lid zonder account</button></div>
     <ul class="card list">${S.members.map((m) => `<li>
       <button class="row grow" style="text-align:left" ${canEdit(m) ? `data-act="editMember" data-v="${m.id}"` : "disabled"}>
