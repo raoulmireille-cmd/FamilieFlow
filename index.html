@@ -152,6 +152,17 @@ input[type=range]{width:100%;accent-color:var(--brand);margin-top:12px}
 .qrbox{display:flex;align-items:center;gap:14px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.3)}
 .qrbox .qr{flex-shrink:0;width:132px;height:132px;background:#fff;border-radius:12px;padding:6px}
 .qrbox .qr svg{display:block;width:100%;height:100%}
+.pts.hot{background:#fee2e2;color:#b91c1c}
+.photobtn{width:34px;height:34px;border-radius:10px;background:var(--soft);font-size:16px;flex-shrink:0}
+.toggle{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+.toggle input{width:20px;height:20px;margin-top:2px;accent-color:var(--brand);flex-shrink:0}
+.photopick{display:block;position:relative;border:2px dashed var(--line);border-radius:14px;padding:14px;text-align:center;cursor:pointer;background:#fff;font-size:14px}
+.photopick input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.photopick.need{border-color:#ef4444;background:#fef2f2}
+.photopick.has{border-style:solid;border-color:#10b981}
+.photopick img{display:block;max-height:180px;margin:10px auto 0;border-radius:10px}
+.swapcard{border-color:#c7d2fe;background:#eef2ff}
+select.in{appearance:auto}
 .invite{background:var(--brand);color:#fff;border-radius:var(--r);padding:20px}
 .code{font:900 38px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.3em;margin:8px 0 12px}
 
@@ -211,7 +222,7 @@ const periodStart = (p) => (p === "week" ? startOfWeek(new Date()) : startOfMont
 /* ===================== Status ===================== */
 const S = {
   user: null, household: null, members: [], tasks: [], events: [], completions: [], rewards: [],
-  shop: [], redemptions: [], balances: {},
+  shop: [], redemptions: [], balances: {}, swaps: [],
   tab: "agenda", loading: true,
   cal: { mode: "week", anchor: new Date(), filter: [] },
   taskFilter: "all", period: "week",
@@ -257,27 +268,31 @@ function makeDemoClient() {
   const seed = () => {
     const H = "h1";
     const M = (id, user_id, display_name, color, avatar, role = "member") => ({ id, household_id:H, user_id, display_name, color, avatar, role, created_at:at(-30, 9) });
-    const T = (id, title, icon, points, recurrence, assigned_member_id = null) => ({ id, household_id:H, title, icon, points, recurrence, assigned_member_id, archived:false });
+    const T = (id, title, icon, points, recurrence, assigned_member_id = null, extra = {}) => ({ id, household_id:H, title, icon, points, recurrence,
+      assigned_member_id, archived:false, bonus_enabled:true, photo_required:false, created_at:at(-30, 9), ...extra });
     const E = (id, title, start, end, location, all_day = false) => ({ id, household_id:H, title, starts_at:start, ends_at:end, location, notes:null, all_day });
     const C = (task_id, task_title, member_id, points, when) => ({ id:uid(), household_id:H, task_id, task_title, member_id, points, completed_at:when, logged_by:"demo-user" });
     return {
       households: [{ id:H, name:"Familie Demo", invite_code:"DEMO42", created_by:"demo-user" }],
       members: [M("m1","demo-user","Raoul","#6366f1","😎","admin"), M("m2",null,"Sam","#10b981","🎸"), M("m3",null,"Noor","#ec4899","🦊"), M("m4",null,"Daan","#f59e0b","⚽")],
       tasks: [T("t1","Afwassen / vaatwasser","🍽️",10,"daily"), T("t2","Vuilnis buiten zetten","🗑️",5,"weekly","m4"),
-        T("t3","Boodschappen doen","🛒",20,"weekly"), T("t4","Ramen lappen","🪟",30,"none"), T("t5","Koken","🍳",20,"daily"),
-        T("t6","Badkamer poetsen","🚿",20,"weekly","m3"), T("t7","Gras maaien","🌱",30,"weekly")],
+        T("t3","Boodschappen doen","🛒",20,"weekly"), T("t4","Ramen lappen","🪟",30,"none",null,{ created_at:at(-5, 9) }), T("t5","Koken","🍳",20,"daily"),
+        T("t6","Badkamer poetsen","🚿",20,"weekly","m3",{ photo_required:true }), T("t7","Gras maaien","🌱",30,"weekly")],
       events: [E("e1","Werk: klant inmeten",at(0,9),at(0,11),"Gouda"), E("e2","Tentamen",at(1,13),at(1,16),"Hogeschool"),
         E("e3","Voetbaltraining",at(0,18,30),at(0,20),"Sportpark"), E("e4","Huisarts",at(2,14),at(2,14,20),null),
         E("e5","Verjaardag oma",at(4,0),at(4,23,59),null,true), E("e6","Bijbaan",at(-1,17),at(-1,21),"Supermarkt")],
       event_members: [["e1","m1"],["e2","m3"],["e3","m4"],["e4","m1"],["e5","m1"],["e5","m2"],["e5","m3"],["e5","m4"],["e6","m2"]].map(([event_id, member_id]) => ({ event_id, member_id })),
       task_completions: [C("t1","Afwassen / vaatwasser","m2",10,at(0,8)), C("t3","Boodschappen doen","m1",20,at(-1,17)),
         C("t5","Koken","m1",20,at(-1,18)), C("t5","Koken","m3",20,at(-2,18)), C("t7","Gras maaien","m4",30,at(-2,11)),
-        C("t1","Afwassen / vaatwasser","m4",10,at(-1,20)), C("t6","Badkamer poetsen","m3",20,at(-3,10)),
+        C("t1","Afwassen / vaatwasser","m4",10,at(-1,20)), C("t6","Badkamer poetsen","m3",20,at(-9,10)),
         C(null,"Auto wassen","m2",20,at(-10,14)), C(null,"Zolder opruimen","m2",60,at(-14,10))],
       shop_items: [["Iemand neemt een taak over","🔄",40],["Je was wordt voor je gedaan","🧺",50],["Kiezen wat we eten","🍕",60],
         ["Auto lenen voor een avond","🚗",80],["€10 tank- of OV-tegoed","⛽",150],["Afhaaleten op kosten van het huis","🥡",200],
         ["Vrienden mee-eten, ouders koken","🍽️",250]].map(([title, icon, cost]) => ({ id:uid(), household_id:H, title, icon, cost, active:true })),
       redemptions: [],
+      swaps: [{ id:"sw1", household_id:H, from_member:"m2", to_member:"m1", give_task_id:"t4", take_task_id:"t5",
+        note:"Ik heb zaterdag een wedstrijd", status:"pending", created_by:null, created_at:at(0, 7), responded_at:null }],
+      photos: {},
       rewards: [{ id:"r1", household_id:H, title:"Samen uit eten", target_points:400, period:"week", active:true }],
     };
   };
@@ -323,7 +338,14 @@ function makeDemoClient() {
   }
 
   const channel = { on() { return channel; }, subscribe() { return channel; } };
+  const toDataUrl = (blob) => new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(blob); });
+  db.photos ||= {}; db.swaps ||= [];
   return {
+    storage: { from: () => ({
+      async upload(path, blob) { db.photos[path] = await toDataUrl(blob); save(); return { data:{ path }, error:null }; },
+      async createSignedUrl(path) { return db.photos[path] ? { data:{ signedUrl: db.photos[path] }, error:null } : { data:null, error:{ message:"Foto niet gevonden" } }; },
+      async remove(paths) { paths.forEach((x) => delete db.photos[x]); save(); return { error:null }; },
+    }) },
     auth: {
       getSession: async () => ({ data: { session: { user: { id:"demo-user", email:"demo@familieflow" } } } }),
       onAuthStateChange() {}, signOut: async () => {},
@@ -340,6 +362,12 @@ function makeDemoClient() {
         db.redemptions.unshift({ id:uid(), household_id:it.household_id, item_id:it.id, item_title:it.title, item_icon:it.icon,
           member_id:m.id, cost:it.cost, redeemed_at:new Date().toISOString(), logged_by:"demo-user" });
         save(); return { data:"ok", error:null };
+      }
+      if (name === "respond_swap") {
+        const sw = db.swaps.find((x) => x.id === a.p_swap);
+        if (!sw || sw.status !== "pending") return { error: { message: "Dit voorstel is al afgehandeld" } };
+        Object.assign(sw, { status: a.p_action, responded_at: new Date().toISOString() }); save();
+        return { data:null, error:null };
       }
       return { error: { message: "Niet beschikbaar in de demo" } };
     },
@@ -362,6 +390,10 @@ const load = {
   },
   async rewards() { const { data } = await sb.from("rewards").select("*").eq("household_id", S.household.id).eq("active", true); if (data) S.rewards = data; },
   async shop() { const { data } = await sb.from("shop_items").select("*").eq("household_id", S.household.id).eq("active", true).order("cost"); if (data) S.shop = data; },
+  async swaps() {
+    const { data } = await sb.from("swaps").select("*").eq("household_id", S.household.id).order("created_at", { ascending:false }).limit(60);
+    if (data) S.swaps = data;
+  },
   async redemptions() {
     const { data } = await sb.from("redemptions").select("*").eq("household_id", S.household.id)
       .gte("redeemed_at", addDays(new Date(), -HISTORY_DAYS).toISOString()).order("redeemed_at", { ascending:false });
@@ -399,7 +431,7 @@ function subscribe() {
   const filter = `household_id=eq.${S.household.id}`;
   channel = sb.channel("hh-" + S.household.id);
   const map = { members:["members"], tasks:["tasks"], events:["events"], task_completions:["completions","balances"],
-    rewards:["rewards"], shop_items:["shop"], redemptions:["redemptions","balances"] };
+    rewards:["rewards"], shop_items:["shop"], redemptions:["redemptions","balances"], swaps:["swaps"] };
   Object.entries(map).forEach(([table, keys]) =>
     channel.on("postgres_changes", { event:"*", schema:"public", table, filter }, async () => {
       await Promise.all(keys.map((k) => load[k]())); render();
@@ -643,19 +675,74 @@ function currentCompletion(task) {
   return S.completions.find((c) => c.task_id === task.id && new Date(c.completed_at) >= since) ?? null;
 }
 
+/* Bonus: +25% van de punten per dag dat een taak te lang blijft liggen, max. dubbel.
+   'Te lang' = langer dan de normale cyclus (dagelijks 1 dag, wekelijks 7, eenmalig 3). */
+const CYCLE_DAYS = { daily: 1, weekly: 7, none: 3 };
+function taskBonus(task) {
+  if (task.bonus_enabled === false) return { bonus: 0, days: 0 };
+  const last = S.completions.find((c) => c.task_id === task.id && !String(c.id).startsWith("temp"));
+  const since = last ? new Date(last.completed_at) : new Date(task.created_at || Date.now());
+  const days = Math.floor((Date.now() - since) / DAY) - (CYCLE_DAYS[task.recurrence] ?? 7);
+  if (days <= 0) return { bonus: 0, days: 0 };
+  return { bonus: Math.min(task.points, Math.round(task.points * 0.25 * days)), days };
+}
+
+/* Ruilen: een geaccepteerde ruil geldt tot de taak daarna één keer gedaan is. */
+function activeSwap(task) {
+  return S.swaps.find((sw) => sw.status === "accepted" && (sw.give_task_id === task.id || sw.take_task_id === task.id)
+    && !S.completions.some((c) => c.task_id === task.id && c.completed_at > sw.responded_at)) ?? null;
+}
+function effectiveAssignee(task) {
+  const sw = activeSwap(task);
+  if (!sw) return task.assigned_member_id;
+  return sw.give_task_id === task.id ? sw.to_member : sw.from_member;
+}
+function canRespondSwap(sw) {
+  const to = member(sw.to_member), from = member(sw.from_member);
+  if (sw.created_by === S.user.id || from?.user_id === S.user.id) return false; // eigen voorstel
+  return to?.user_id === S.user.id || me()?.role === "admin" || (!to?.user_id && from?.user_id !== S.user.id);
+}
+const taskTitle = (id) => { const t = S.tasks.find((x) => x.id === id); return t ? `${esc(t.icon)} ${esc(t.title)}` : "<i>verwijderde taak</i>"; };
+
+function swapCards() {
+  const pending = S.swaps.filter((sw) => sw.status === "pending");
+  if (!pending.length) return "";
+  return `<h2 class="label">Ruilvoorstellen · ${pending.length}</h2><ul class="stack">${pending.map((sw) => {
+    const from = member(sw.from_member), to = member(sw.to_member);
+    const mineOut = sw.created_by === S.user.id || from?.user_id === S.user.id;
+    const deal = `<b>${esc(from?.display_name)}</b> geeft <b>${taskTitle(sw.give_task_id)}</b> aan <b>${to?.id === me()?.id ? "jou" : esc(to?.display_name)}</b>
+      ${sw.take_task_id ? ` en doet in ruil <b>${taskTitle(sw.take_task_id)}</b>` : ` <span class="muted">(een gunst, niets terug)</span>`}`;
+    const buttons = canRespondSwap(sw)
+      ? `<button class="btn" style="height:38px" data-act="respondSwap" data-v="${sw.id}" data-a="accepted">Accepteren</button>
+         <button class="btn ghost" style="height:38px" data-act="respondSwap" data-v="${sw.id}" data-a="declined">Weigeren</button>`
+      : `<span class="muted small grow">Wacht op ${esc(to?.display_name)}…</span>`;
+    return `<li class="card pad swapcard">
+      <div class="row" style="align-items:flex-start">${avatar(from, 32)}<p class="small grow">${deal}
+        ${sw.note ? `<br><span class="muted">“${esc(sw.note)}”</span>` : ""}</p></div>
+      <div class="row wrapflex" style="margin-top:10px">${buttons}
+        ${mineOut ? `<button class="muted small bold" data-act="respondSwap" data-v="${sw.id}" data-a="cancelled">Intrekken</button>` : ""}</div></li>`;
+  }).join("")}</ul>`;
+}
+
 function viewTasks() {
   const mine = me();
   const rows = S.tasks
-    .filter((t) => S.taskFilter === "all" || !t.assigned_member_id || t.assigned_member_id === mine?.id)
+    .filter((t) => { const a = effectiveAssignee(t); return S.taskFilter === "all" || !a || a === mine?.id; })
     .map((t) => ({ t, c: currentCompletion(t) }));
   const open = rows.filter((r) => !r.c), done = rows.filter((r) => r.c);
   const myWeek = S.completions.filter((c) => c.member_id === mine?.id && new Date(c.completed_at) >= startOfWeek(new Date()))
     .reduce((s, c) => s + c.points, 0);
 
   const row = ({ t, c }) => {
-    const by = c && member(c.member_id), asg = member(t.assigned_member_id);
+    const by = c && member(c.member_id), asg = member(effectiveAssignee(t)), swapped = !c && activeSwap(t);
+    const { bonus, days } = c ? { bonus: 0, days: 0 } : taskBonus(t);
     const sub = c ? `door ${esc(by?.avatar)} ${esc(by?.display_name)} · ${fmt(c.completed_at, { weekday:"short" })} ${time(c.completed_at)}`
-      : `${RECUR[t.recurrence]}${asg ? ` · ${esc(asg.avatar)} ${esc(asg.display_name)}` : ""}`;
+        + (c.bonus ? ` · 🔥 +${c.bonus}` : "")
+      : `${RECUR[t.recurrence]}${t.photo_required ? " · 📷" : ""}${asg ? ` · ${swapped ? "🔄 " : ""}${esc(asg.avatar)} ${esc(asg.display_name)}` : ""}`
+        + (bonus ? ` · <span style="color:#b91c1c">${days} ${days === 1 ? "dag" : "dagen"} te laat</span>` : "");
+    const pts = c ? `<span class="pts">+${c.points}</span>`
+      : bonus ? `<span class="pts hot" title="Inclusief ${bonus} bonuspunten">🔥 +${t.points + bonus}</span>` : `<span class="pts">+${t.points}</span>`;
+    const photo = c?.photo_path ? `<button class="photobtn" data-act="viewPhoto" data-v="${c.id}" aria-label="Foto bekijken">📷</button>` : "";
     const action = !c ? `<button class="check" data-act="check" data-v="${t.id}" aria-label="Afvinken">✓</button>`
       : c.logged_by === S.user.id && !String(c.id).startsWith("temp")
         ? `<button class="muted small bold" style="height:44px;padding:0 6px" data-act="undo" data-v="${c.id}">Ongedaan</button>`
@@ -664,14 +751,16 @@ function viewTasks() {
       <button class="row grow" style="text-align:left" data-act="editTask" data-v="${t.id}">
         <span class="ticon">${esc(t.icon)}</span>
         <span class="grow"><span class="t bold trunc" style="display:block">${esc(t.title)}</span><span class="muted small trunc" style="display:block">${sub}</span></span>
-      </button><span class="pts">+${t.points}</span>${action}</li>`;
+      </button>${photo}${pts}${action}</li>`;
   };
 
   return `
     <div class="row between" style="align-items:flex-end">
-      <div><h1>Wie doet wat</h1><p class="muted small">Jij deze week: <b style="color:var(--ink)">${myWeek} punten</b></p></div>
+      <div><h1 style="white-space:nowrap">Wie doet wat</h1><p class="muted small">Jij deze week: <b style="color:var(--ink)">${myWeek} punten</b></p></div>
       ${seg("taskFilter", S.taskFilter, [["all","Alles"],["mine","Voor mij"]])}
     </div>
+    <button class="btn ghost full" style="margin-top:12px;height:40px" data-act="newSwap">🔄 Klus ruilen</button>
+    ${swapCards()}
     <h2 class="label">Te doen · ${open.length}</h2>
     ${open.length ? `<ul class="stack">${open.map(row).join("")}</ul>` : `<p class="card pad muted" style="text-align:center">🎉 Alles gedaan. Lekker bezig!</p>`}
     ${done.length ? `<h2 class="label">Gedaan · ${done.length}</h2><ul class="stack">${done.map(row).join("")}</ul>` : ""}
@@ -690,6 +779,10 @@ function taskForm(t) {
       <input type="range" name="points" min="1" max="100" value="${pts}" data-act-input="points"></label>
     <label class="f"><span>Hoe vaak</span><div class="seg">${Object.entries(RECUR).map(([v,l]) =>
       `<label><input type="radio" name="recurrence" value="${v}" ${v===rec?"checked":""}><span>${l}</span></label>`).join("")}</div></label>
+    <label class="toggle"><input type="checkbox" name="bonus_enabled" ${t?.bonus_enabled === false ? "" : "checked"}>
+      <span><b>🔥 Bonus als het blijft liggen</b><br><span class="muted small">+25% per dag te laat, tot dubbele punten</span></span></label>
+    <label class="toggle"><input type="checkbox" name="photo_required" ${t?.photo_required ? "checked" : ""}>
+      <span><b>📷 Foto verplicht bij afvinken</b><br><span class="muted small">bijv. "keuken opgeruimd" of "badkamer schoon"</span></span></label>
     <label class="f"><span>Vaste persoon (optioneel)</span><div class="pick">
       <label><input type="radio" name="assigned" value="" ${!asg?"checked":""}><span class="chip plain">Iedereen</span></label>
       ${S.members.map((m) => `<label><input type="radio" name="assigned" value="${m.id}" ${asg===m.id?"checked":""}><span class="chip" style="--c:${safeColor(m.color)}">${avatar(m,24)} ${esc(m.display_name)}</span></label>`).join("")}
@@ -700,18 +793,49 @@ function taskForm(t) {
   </form>`;
 }
 
-async function completeTask(task, memberId) {
+/** Foto verkleinen tot max. 1280px JPEG, zodat het snel uploadt en weinig ruimte kost. */
+function shrinkImage(file, max = DEMO ? 800 : 1280) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("Foto verwerken mislukt"))), "image/jpeg", DEMO ? 0.7 : 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Dit bestand is geen foto")); };
+    img.src = url;
+  });
+}
+
+async function completeTask(task, memberId, file = null) {
   closeSheet();
-  const temp = { id:"temp-" + Date.now(), household_id:task.household_id, task_id:task.id, task_title:task.title,
-    member_id:memberId, points:task.points, completed_at:new Date().toISOString(), logged_by:S.user.id };
-  S.completions.unshift(temp);
-  if (S.balances[memberId]) S.balances[memberId].balance += task.points;
-  render();
+  const { bonus } = taskBonus(task);
+  const points = task.points + bonus;
   const m = member(memberId);
-  toast(`+${task.points} voor ${m?.display_name ?? "?"} ${m?.avatar ?? ""}`);
+
+  let photo_path = null;
+  if (file) {
+    toast("Foto uploaden…");
+    try {
+      const blob = await shrinkImage(file);
+      photo_path = `${task.household_id}/${crypto.randomUUID ? crypto.randomUUID() : Date.now()}.jpg`;
+      const { error } = await sb.storage.from("bewijs").upload(photo_path, blob, { contentType: "image/jpeg" });
+      if (error) throw error;
+    } catch (e) { return toast("Foto uploaden mislukt: " + e.message); }
+  }
+
+  const temp = { id:"temp-" + Date.now(), household_id:task.household_id, task_id:task.id, task_title:task.title,
+    member_id:memberId, points, bonus, photo_path, completed_at:new Date().toISOString(), logged_by:S.user.id };
+  S.completions.unshift(temp);
+  if (S.balances[memberId]) S.balances[memberId].balance += points;
+  render();
+  toast(`+${points} voor ${m?.display_name ?? "?"} ${m?.avatar ?? ""}${bonus ? ` (🔥 ${bonus} bonus)` : ""}`);
 
   const { data, error } = await sb.from("task_completions").insert({
-    household_id:task.household_id, task_id:task.id, task_title:task.title, member_id:memberId, points:task.points, logged_by:S.user.id,
+    household_id:task.household_id, task_id:task.id, task_title:task.title, member_id:memberId, points, bonus, photo_path, logged_by:S.user.id,
   }).select().single();
   S.completions = S.completions.filter((c) => c.id !== temp.id);
   if (error) { await load.balances(); render(); return toast("Mislukt: " + error.message); }
@@ -748,7 +872,9 @@ function viewScores() {
 
   // Geschiedenis: verdiende én ingewisselde punten door elkaar, nieuwste eerst
   const feed = [
-    ...inPeriod.map((c) => ({ at: c.completed_at, m: c.member_id, text: esc(c.task_title), pts: `+${c.points}`, plus: true })),
+    ...inPeriod.map((c) => ({ at: c.completed_at, m: c.member_id, pts: `+${c.points}`, plus: true,
+      text: esc(c.task_title) + (c.bonus ? ` <span style="color:#b91c1c">🔥</span>` : "")
+        + (c.photo_path ? ` <button data-act="viewPhoto" data-v="${c.id}" aria-label="Foto bekijken">📷</button>` : "") })),
     ...S.redemptions.filter((r) => new Date(r.redeemed_at).getTime() >= since).map((r) => ({
       at: r.redeemed_at, m: r.member_id, text: `${esc(r.item_icon)} ${esc(r.item_title)} <span class="muted">ingewisseld</span>`, pts: `−${r.cost}`, plus: false,
       undo: r.logged_by === S.user.id || me()?.role === "admin" ? r.id : null })),
@@ -902,16 +1028,60 @@ const actions = {
   },
   check: (v) => {
     const task = S.tasks.find((t) => t.id === v);
-    if (S.members.length === 1) return completeTask(task, me().id);
+    const { bonus, days } = taskBonus(task);
     const sorted = [...S.members].sort((a, b) => (b.id === me()?.id) - (a.id === me()?.id));
-    openSheet(`${task.icon} ${task.title}`, `<p class="muted small" style="margin-bottom:14px">Wie heeft dit gedaan? (+${task.points} punten)</p>
-      <div class="who">${sorted.map((m) => `<button data-act="completeAs" data-v="${task.id}" data-m="${m.id}">${avatar(m, 52)}${m.id === me()?.id ? "Ik" : esc(m.display_name)}</button>`).join("")}</div>`);
+    openSheet(`${task.icon} ${task.title}`, `
+      <p class="muted small" style="margin-bottom:12px">Wie heeft dit gedaan? <b style="color:var(--ink)">+${task.points + bonus} punten</b>
+        ${bonus ? `<br>🔥 Inclusief ${bonus} bonus: lag al ${days} ${days === 1 ? "dag" : "dagen"} te lang` : ""}</p>
+      <label class="photopick" id="ffPhotoPick">
+        <input type="file" accept="image/*" id="ffPhoto">
+        <span class="ph-empty">📷 ${task.photo_required ? "<b>Foto verplicht</b>: tik om een foto te maken" : "Foto toevoegen <span class='muted'>(optioneel)</span>"}</span>
+        <img alt="" hidden>
+      </label>
+      <div class="who" style="margin-top:14px">${sorted.map((m) => `<button data-act="completeAs" data-v="${task.id}" data-m="${m.id}">${avatar(m, 52)}${m.id === me()?.id ? "Ik" : esc(m.display_name)}</button>`).join("")}</div>`);
   },
-  completeAs: (v, el) => completeTask(S.tasks.find((t) => t.id === v), el.dataset.m),
+  completeAs: (v, el) => {
+    const task = S.tasks.find((t) => t.id === v), file = $("#ffPhoto")?.files?.[0] ?? null;
+    if (task.photo_required && !file) { $("#ffPhotoPick").classList.add("need"); return toast("Voeg eerst een foto toe 📷"); }
+    completeTask(task, el.dataset.m, file);
+  },
+  viewPhoto: async (v) => {
+    const c = S.completions.find((x) => x.id === v);
+    if (!c?.photo_path) return;
+    const { data, error } = await sb.storage.from("bewijs").createSignedUrl(c.photo_path, 3600);
+    if (error) return toast("Foto laden mislukt: " + error.message);
+    const m = member(c.member_id);
+    openSheet(`📷 ${c.task_title}`, `<img src="${esc(data.signedUrl)}" alt="Foto van ${esc(c.task_title)}" style="width:100%;border-radius:14px;display:block">
+      <p class="muted small" style="margin-top:8px">${esc(m?.avatar)} ${esc(m?.display_name)} · ${fmt(c.completed_at, { weekday:"long", day:"numeric", month:"long" })} ${time(c.completed_at)}</p>`);
+  },
+
+  newSwap: () => {
+    const mine = me(), others = S.members.filter((m) => m.id !== mine?.id);
+    const open = S.tasks.filter((t) => !currentCompletion(t));
+    if (!others.length) return toast("Voeg eerst een ander gezinslid toe");
+    if (!open.length) return toast("Er staan geen open taken om te ruilen");
+    const opts = (list) => list.map((t) => `<option value="${t.id}">${esc(t.icon)} ${esc(t.title)} (+${t.points})</option>`).join("");
+    openSheet("🔄 Klus ruilen", `<form data-form="swap" class="stack">
+      <label class="f"><span>Ik geef weg</span><select class="in" name="give" required>${opts(open)}</select></label>
+      <label class="f"><span>Aan</span><div class="pick">${others.map((m, i) =>
+        `<label><input type="radio" name="to" value="${m.id}" ${i === 0 ? "checked" : ""}><span class="chip" style="--c:${safeColor(m.color)}">${avatar(m, 24)} ${esc(m.display_name)}</span></label>`).join("")}</div></label>
+      <label class="f"><span>In ruil doe ik</span><select class="in" name="take"><option value="">Niets, het is een gunst</option>${opts(open)}</select></label>
+      <label class="f"><span>Bericht (optioneel)</span><input class="in" name="note" maxlength="200" placeholder="bijv. ik heb zaterdag een wedstrijd"></label>
+      <p class="muted small">Geldt voor de eerstvolgende keer. Wie de taak afvinkt, krijgt de punten.</p>
+      <p class="msg"></p><button class="btn full">Voorstel versturen</button></form>`);
+  },
+  respondSwap: async (v, el) => {
+    const label = { accepted: "geaccepteerd 🤝", declined: "geweigerd", cancelled: "ingetrokken" }[el.dataset.a];
+    const { error } = await sb.rpc("respond_swap", { p_swap: v, p_action: el.dataset.a });
+    if (error) return toast(error.message);
+    toast(`Ruil ${label}`);
+    await load.swaps(); render();
+  },
   undo: async (v) => {
     const c = S.completions.find((x) => x.id === v);
     S.completions = S.completions.filter((x) => x.id !== v); render();
     const { error } = await sb.from("task_completions").delete().eq("id", v);
+    if (!error && c?.photo_path) sb.storage.from("bewijs").remove([c.photo_path]);
     load.balances().then(render);
     if (error) { toast("Mislukt: " + error.message); return load.completions().then(render); }
     if (c?.task_id) { await sb.from("tasks").update({ archived:false }).eq("id", c.task_id).eq("recurrence", "none"); await load.tasks(); render(); }
@@ -997,6 +1167,12 @@ document.addEventListener("input", (e) => {
   }
 });
 document.addEventListener("change", (e) => {
+  if (e.target.id === "ffPhoto" && e.target.files?.[0]) {
+    const pick = $("#ffPhotoPick"), img = $("img", pick);
+    img.src = URL.createObjectURL(e.target.files[0]); img.hidden = false;
+    pick.classList.add("has"); pick.classList.remove("need");
+    $(".ph-empty", pick).innerHTML = "📷 Foto klaar · tik om te wijzigen";
+  }
   if (e.target.name === "all_day") e.target.form.classList.toggle("allday", e.target.checked);
 });
 
@@ -1039,9 +1215,18 @@ const forms = {
     if (who.length) { const r = await sb.from("event_members").insert(who.map((member_id) => ({ event_id: id, member_id }))); if (r.error) throw r.error; }
     await load.events(); closeSheet(); render();
   },
+  async swap(f) {
+    if (f.take.value && f.take.value === f.give.value) throw new Error("Kies twee verschillende taken.");
+    const { error } = await sb.from("swaps").insert({ household_id: S.household.id, from_member: me().id, to_member: f.to.value,
+      give_task_id: f.give.value, take_task_id: f.take.value || null, note: f.note.value.trim() || null,
+      status: "pending", created_by: S.user.id });
+    if (error) throw error;
+    await load.swaps(); closeSheet(); render(); toast("Ruilvoorstel verstuurd 🔄");
+  },
   async task(f) {
     const row = { title: f.title.value.trim(), icon: f.icon.value, points: +f.points.value,
-      recurrence: f.recurrence.value, assigned_member_id: f.assigned.value || null };
+      recurrence: f.recurrence.value, assigned_member_id: f.assigned.value || null,
+      bonus_enabled: f.bonus_enabled.checked, photo_required: f.photo_required.checked };
     const { error } = f.dataset.id
       ? await sb.from("tasks").update(row).eq("id", f.dataset.id)
       : await sb.from("tasks").insert({ ...row, household_id: S.household.id });
